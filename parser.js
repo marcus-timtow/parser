@@ -18,7 +18,7 @@
             return that[dep.split("/").pop()];
         }));
     }
-})("parser", function () {
+})("parser", ["../utils/utils"], function (utils) {
 
     /**
      * A stringifier/parser for js entities.
@@ -27,7 +27,6 @@
     var api = {};
 
     /* Stringifier  */
-
 
     api.stringifyDate = function (target) {
         return target.toJSON();
@@ -42,7 +41,7 @@
     api.stringifyBoolean = function (target) {
         return target ? "true" : "false";
     };
-    api.stringify = function (type, target) {
+    api.stringify = function (type, target, strict) {
         switch (type) {
             case "string":
                 return target;
@@ -55,7 +54,11 @@
             case "regex":
                 return api.stringifyRegex(target);
             default:
-                throw new Error("unkown type, cannot stringify " + type);
+                if (strict) {
+                    throw new Error("cannot stringify " + type);
+                } else {
+                    return undefined;
+                }
         }
     };
 
@@ -65,7 +68,7 @@
      * handled. All prototypal inheritance is lost. All null and undefined properties
      * as well as all methods are stripped from the clone.
      * 
-     * @param {*} target A JSON-stringifiable js entity. That is anything but undefined, null, or a function.
+     * @param {*} target A JSON-stringifiable js entity.
      * @param {boolean} [strict=false] Enable strict mode. In strict mode, only undefined properties are stripped from 
      * the target, null properties and methods will throw errors.
      * @returns {JSON object}
@@ -73,229 +76,103 @@
      * @throws {Error} cannot convert null|function|undefined to JSON
      */
     api.stringifyToJSON = function (target, strict) {
-        if (typeof target === "function") {
-            throw new Error("cannot convert a function to JSON");
-        } else if (typeof target === "object") {
-            if (target === null) {
-                throw new Error("cannot convert a null value to JSON");
-            } else if (Array.isArray(target)) {
+        var type = utils.typeof(target);
+        switch (type) {
+            case "function":
+                if (strict) {
+                    throw new Error("cannot convert a function to a JSON object");
+                } else {
+                    return undefined;
+                }
+            case "null":
+                if (strict) {
+                    throw new Error("cannot convert null to a JSON object");
+                } else {
+                    return undefined;
+                }
+            case "array":
                 return target.map(function (el) {
-                    var ret;
-                    try {
-                        ret = api.stringifyToJSON(el);
-                    } catch (err) {
-                        ret = null;
-                        if (strict && !err.undefined) {
-                            throw err;
-                        }
-                    }
-                    return ret;
+                    return api.stringifyToJSON(el, strict);
                 }).filter(function (el) {
-                    return el !== null;
+                    return el !== undefined;
                 });
-            } else if (target instanceof Date) {
-                return api.stringify("date", target);
-            } else if (target instanceof RegExp) {
-                return api.stringify("regex", target);
-            } else {
+                break;
+            case "object":
                 var ret = {};
                 for (var prop in target) {
                     if (target.hasOwnProperty(prop)) {
-                        var pret;
-                        try {
-                            pret = api.stringifyToJSON(target[prop]);
+                        let pret = api.stringifyToJSON(target[prop], strict);
+                        if (pret !== undefined){
                             ret[prop] = pret;
-                        } catch (err) {
-                            if (strict && !err.undefined) {
-                                throw err;
-                            }
                         }
                     }
                 }
                 return ret;
-            }
-        } else if (typeof target === "undefined") {
-            var err = new Error("cannot convert an undefined value to JSON");
-            err.undefined = true;
-            throw err;
-        } else {
-            return target;
+            case "undefined":
+                return undefined;
+            default:
+                return api.stringify(type, target);
         }
     };
 
+
+
     /**
-     * Stringifies a js entity to a valid QSO object. The original entity is left
+     * Stringifies a js entity to a valid SO (String Object). The original entity is left
      * untouched and only a clone is returned. RegExp and Date objects are specially 
      * handled. All prototypal inheritance is lost. All null and undefined properties
      * as well as all methods are stripped from the clone. Numbers and Booleans are converted
      * to strings.
-     * **Valid QSO objects cannot possess objects or arrays embedded into arrays.**
      * 
      * @param {type} target
-     * @param {boolean|number} [strict=true] Strict mode.
-     *  1. If strict is 0 or false, embedded arrays are normalized.
-     *  2. If strict is 1 or true, embedded arrays trigger errors.
-     *  3. If strict is 2, embedded arrays, null properties and methods trigger errors 
-     * @param {type} _flag internal, used by recursive calls.
-     * @returns {QSO}
+     * @param {boolean|number} [strict=false] Strict mode. In strict mode null properties and methods trigger errors.
+     * @returns {SO}
      * 
-     * @throws {Error} QSO objects cannot possess objects or arrays embedded into arrays
-     * @throws {Error} cannot convert null|function|undefined to QSO
+     * @throws {Error} cannot convert null|function to a SO
      */
-    api.stringifyToQSO = function (target, strict, _flag) {
-        if (strict === 0 || strict === false) {
-            strict = 0;
-        } else if (strict !== 2) {
-            strict = 1;
-        }
-
-        var type;
-        if (typeof target === "function") {
-            throw new Error("cannot convert a function to QSO");
-        } else if (typeof target === "object") {
-            if (target === null) {
-                throw new Error("cannot convert a null value to QSO");
-            } else if (Array.isArray(target)) {
-                if (_flag) {
-                    var err = new Error("cannot convert embedded arrays to QSO");
-                    err.embedded = true;
-                    throw err;
+    api.stringifyToSO = function (target, strict) {
+        var type = utils.typeof(target);
+        switch (type) {
+            case "function":
+                if (strict) {
+                    throw new Error("cannot convert a function to a StringObject");
+                } else {
+                    return undefined;
                 }
+            case "null":
+                if (strict) {
+                    throw new Error("cannot convert null to a StringObject");
+                } else {
+                    return undefined;
+                }
+            case "array":
                 return target.map(function (el) {
-                    var ret;
-                    try {
-                        ret = api.stringifyToQSO(el, strict, true);
-                    } catch (err) {
-                        if (strict === 0) {
-                            ret = null;
-                        } else if (strict === 1) {
-                            if (err.embedded) {
-                                throw err;
-                            } else {
-                                ret = null;
-                            }
-                        } else {
-                            if (err.undefined) {
-                                ret = null;
-                            } else {
-                                throw err;
-                            }
-                        }
-                    }
-                    return ret;
+                    return api.stringifyToSO(el, strict);
                 }).filter(function (el) {
-                    return el !== null;
+                    return el !== undefined;
                 });
-            } else if (target instanceof Date) {
-                type = "date";
-            } else if (target instanceof RegExp) {
-                type = "regex";
-            } else {
-                if (_flag) {
-                    var err = new Error("cannot convert objects embedded into arrays to QSO");
-                    err.embedded = true;
-                    throw err;
-                }
+                break;
+            case "object":
                 var ret = {};
                 for (var prop in target) {
                     if (target.hasOwnProperty(prop)) {
-                        var pret;
-                        try {
-                            pret = api.stringifyToQSO(target[prop], strict, _flag);
-                        } catch (err) {
-                            if (strict === 0) {
-                                continue;
-                            } else if (strict === 1) {
-                                if (err.embedded) {
-                                    throw err;
-                                } else {
-                                    continue;
-                                }
-                            } else {
-                                if (err.undefined) {
-                                    continue;
-                                } else {
-                                    throw err;
-                                }
-                            }
+                        let pret = api.stringifyToSO(target[prop], strict);
+                        if (pret !== undefined){
+                            ret[prop] = pret;
                         }
-                        ret[prop] = pret;
                     }
                 }
                 return ret;
-            }
-        } else if (typeof target === "undefined") {
-            var err = new Error("cannot convert an undefined value to QSO");
-            err.undefined = true;
-            throw err;
-        } else {
-            type = typeof target;
+            case "undefined":
+                return undefined;
+            default:
+                return api.stringify(type, target);
         }
-        return api.stringify(type, target);
     };
-    
-    /**
-     * Stringifies a js entity to a valid PSO object. The original entity is left
-     * untouched and only a clone is returned. RegExp and Date objects are specially 
-     * handled. All prototypal inheritance is lost. All null and undefined properties
-     * as well as all methods and arrays are stripped from the clone. Numbers and Booleans are converted
-     * to strings.
-     * 
-     * @param {type} target
-     * @param {boolean} [strict=true] Strict mode.
-     *  1. If strict is false, arrays, null properties and methods are silently stripped from the PSO.
-     *  2. If strict is true, arrays, null properties and methods trigger errors.
-     * @returns {PSO}
-     * 
-     * @throws {Error} cannot convert null|function|undefined|array to PSO
-     */
-    api.stringifyToPSO = function (target, strict) {
-        strict = strict === false ? false : true;
-        var type;
-        if (typeof target === "function") {
-            throw new Error("cannot convert a function to PSO");
-        } else if (typeof target === "object") {
-            if (target === null) {
-                throw new Error("cannot convert a null value to PSO");
-            } else if (Array.isArray(target)) {
-                throw new Error("cannot convert a arrays to PSO");
-            } else if (target instanceof Date) {
-                type = "date";
-            } else if (target instanceof RegExp) {
-                type = "regex";
-            } else {
-                var ret = {};
-                for (var prop in target) {
-                    if (target.hasOwnProperty(prop)) {
-                        var pret;
-                        try {
-                            pret = api.stringifyToPSO(target[prop], strict);
-                        } catch (err) {
-                            if (strict){
-                                throw err;
-                            } else {
-                                continue;
-                            }
-                        }
-                        ret[prop] = pret;
-                    }
-                }
-                return ret;
-            }
-        } else if (typeof target === "undefined") {
-            var err = new Error("cannot convert an undefined value to PSO");
-            err.undefined = true;
-            throw err;
-        } else {
-            type = typeof target;
-        }
-        return api.stringify(type, target);
-    };
+
 
 
     /* Parser  */
-
-
 
     /**
      * Base 10 Number.parseInt().
@@ -361,9 +238,9 @@
     /**
      * Parses a string to the type type.
      * 
-     * @param {string} type
+     * @param {string} type ="string"|"number"|"boolean"|"date"|"regex"|"undefined"|"null"
      * @param {string} str
-     * @returns {(string|number|boolean|Date)}
+     * @returns {(string|number|boolean|Date|RegExp|null|undefined)}
      * 
      * @throws {Error} type not supported.
      * @throws {Error} @see utils.parseDate, @see utils.parseBoolean, @see utils.parseNumber
@@ -380,11 +257,15 @@
                 return api.parseDate(str);
             case "regex":
                 return api.parseRegex(str);
+            case "undefined":
+                return undefined;
+            case "null":
+                return null;
             default:
-                throw new Error("unkown type, cannot parse " + type);
+                throw new Error("cannot parse " + type);
         }
     };
-    
+
     /**
      * Alias for schema.fromJSON(target);
      * 
@@ -397,32 +278,21 @@
     api.parseFromJSON = function (schema, target) {
         return schema.fromJSON(target);
     };
-    
-    /**
-     * Alias for schema.fromQSO(target);
-     * 
-     * @requires Schema
-     * 
-     * @param {Schema} schema
-     * @param {QSO} target
-     * @returns {*}
-     */
-    api.parseFromQSO = function (schema, target) {
-        return schema.fromQSO(target);
-    };
 
     /**
-     * Alias for schema.fromPSO(target);
+     * Alias for schema.fromSO(target);
      * 
      * @requires Schema
      * 
      * @param {Schema} schema
-     * @param {PSO} target
+     * @param {SO} target
      * @returns {*}
      */
-    api.parseFromPSO = function (schema, target) {
-        return schema.fromPSO(target);
+    api.parseFromSO = function (schema, target) {
+        return schema.fromSO(target);
     };
+
+
 
     return api;
 });
