@@ -16,7 +16,7 @@ let test = {
 };
 
 let json = parser.stringifyToJSON(test);
-let qso = parser.stringifyToQSO(test);
+let qso = parser.stringifyToSO(test);
 
 console.log(json);
 console.log(qso);
