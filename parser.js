@@ -175,7 +175,7 @@
     /* Parser  */
 
     /**
-     * Base 10 Number.parseInt().
+     * Parses base 10 floats (/^(\-|\+)?\d+(\.\d+)?$/) 
      * 
      * @param {string} str
      * @returns {number}
@@ -183,11 +183,11 @@
      * @throws {Error} If number is NaN.
      */
     api.parseNumber = function (str) {
-        var parsed = Number.parseInt(str, 10);
-        if (Number.isNaN(parsed)) {
+        if (/^(\-|\+)?\d+(\.\d+)?$/.test(str)){
+            return Number(str);
+        } else {
             throw new Error(str + " is not a number");
         }
-        return parsed;
     };
 
     /**
